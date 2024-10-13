@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Web3 from "web3";
 import "./App.css";
 import detectEthereumProvider from "@metamask/detect-provider";
@@ -13,11 +13,14 @@ function App() {
 
   const [account, setAccount] = useState(null);
   const [balance, setBalance] = useState(null);
+  const [accountBalance, setAccountBalance] = useState(null);
   const [relod, shouldRelod] = useState(false);
 
   const [withdrawAmount, setWithdrawAmount] = useState(""); // State for withdrawal input
 
   const relodEffect = () => shouldRelod(!relod);
+
+  // const relodEffect = () => shouldRelod((prev) => !prev);
 
   useEffect(() => {
     const loadProvider = async () => {
@@ -95,6 +98,7 @@ function App() {
       });
 
       console.log("Transfer successful:", transaction);
+      await fetchAccountBalance(account); // Fetch account balance after transfer
     } catch (error) {
       console.error("Failed to transfer funds:", error);
       alert(`Error: ${error.message}`);
@@ -125,11 +129,7 @@ function App() {
         });
       console.log("Withdraw successful:", transaction);
       setWithdrawAmount(""); // Clear the input after withdrawal
-      // Reload balance after withdrawal
-      const updatedBalance = await web3.eth.getBalance(
-        contract.options.address
-      );
-      setBalance(web3.utils.fromWei(updatedBalance, "ether"));
+      await fetchAccountBalance(account); // Fetch account balance after withdrawal
     } catch (error) {
       console.error("Failed to withdraw funds:", error);
       alert(`Error: ${error.message}`);
@@ -137,20 +137,43 @@ function App() {
     relodEffect();
   };
 
+  // Function to fetch the balance of the connected account
+  const fetchAccountBalance = useCallback(
+    async (account) => {
+      // Use useCallback
+      if (!web3Api.web3) return;
+
+      try {
+        const balance = await web3Api.web3.eth.getBalance(account);
+        setAccountBalance(web3Api.web3.utils.fromWei(balance, "ether"));
+      } catch (error) {
+        console.error("Failed to fetch account balance:", error);
+      }
+      // relodEffect();
+    },
+    [web3Api.web3]
+  );
 
   useEffect(() => {
     const getAccount = async () => {
       try {
         const accounts = await web3Api.web3.eth.getAccounts();
-        setAccount(accounts[0]);
+        if (accounts.length > 0) {
+          setAccount(accounts[0]);
+          await fetchAccountBalance(accounts[0]); // Ensure account balance is fetched
+        } else {
+          console.error("No accounts found");
+        }
       } catch (error) {
         console.error("Failed to load accounts:", error);
       }
     };
+
     if (web3Api.web3) {
       getAccount();
     }
-  }, [web3Api.web3]);
+  }, [web3Api.web3, fetchAccountBalance]); // Include fetchAccountBalance here
+
   // console.log(web3Api.web3);
 
   return (
@@ -163,6 +186,10 @@ function App() {
           </h5>
           <p class="card-text">
             Account : {account ? account : "Not connected"}
+          </p>
+          <p className="card-title">
+            Your Account Balance:{" "}
+            {accountBalance ? `${accountBalance} ETH` : "Loading..."}
           </p>
           {/* <button
               type="button"
